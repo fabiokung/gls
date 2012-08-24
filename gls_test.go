@@ -114,6 +114,12 @@ func (w *testStringWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+func (w *testStringWriter) failUnlessN(count int) {
+	if w.n != count {
+		w.T.Errorf("expected to Write %d times, received %d", count, w.n)
+	}
+}
+
 func TestGetTable(t *testing.T) {
 	db := handleTestDBPrep(t)
 	defer teardownAndCloseDB(t, db)
@@ -217,6 +223,7 @@ func TestStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error from LockstepStream: %v", err.Error())
 	}
+	w.failUnlessN(3)
 }
 
 func TestStreamAfterDroppingColumn(t *testing.T) {
@@ -231,6 +238,7 @@ func TestStreamAfterDroppingColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error from LockstepStream: %v", err.Error())
 	}
+	w.failUnlessN(3)
 
 	_, err = db.Exec("ALTER TABLE domains DROP COLUMN deleted")
 	if err != nil {
@@ -242,4 +250,5 @@ func TestStreamAfterDroppingColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error from LockstepStream: %v", err.Error())
 	}
+	w.failUnlessN(3)
 }
