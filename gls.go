@@ -199,9 +199,9 @@ func getType(pgtype string) reflect.Type {
 }
 
 func startLockstepQuery(db *sql.DB, tableName string) (*sql.Rows, error) {
-	return db.Query(fmt.Sprintf("SELECT txid_snapshot_xmin(txid_current_snapshot()), name, * FROM %s", tableName))
+	return db.Query(fmt.Sprintf("SELECT txid_snapshot_xmin(txid_current_snapshot()), * FROM %s", tableName))
 }
 
 func (t *pgTable) startLockstepQuery() (*sql.Rows, error) {
-	return t.parent.db.Query(fmt.Sprintf("SELECT txid_snapshot_xmin(txid_current_snapshot()), name, * FROM %s", t.name))
+	return t.parent.db.Query(fmt.Sprintf("SELECT txid_snapshot_xmin(txid_current_snapshot()), * FROM %s", t.name))
 }
