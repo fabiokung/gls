@@ -8,6 +8,7 @@ import (
 	"gls/logger"
 	"reflect"
 	"strings"
+	"time"
 )
 
 func OpenDB(connString string) (dbRef *sql.DB, err error) {
@@ -21,7 +22,7 @@ func OpenDB(connString string) (dbRef *sql.DB, err error) {
 type pgTable struct {
 	parent *LockstepServer
 	name string
-	types map[string]reflect.Kind
+	types map[string]reflect.Type
 	loaded bool
 }
 
@@ -37,7 +38,6 @@ func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 		return err
 	}
 	for s := range c {
-		fmt.Println(s)
 		_, err = w.Write([]byte(s["name"].(string)))
 		if err != nil {
 			finished <- true
@@ -98,12 +98,12 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 			}
 			for i, name := range cols {
 				switch fargs[i].(type) {
-				case *int64:
-					res[name] = *(reflect.ValueOf(fargs[i]).Interface().(*int64))
-				case *string:
-					res[name] = *(reflect.ValueOf(fargs[i]).Interface().(*string))
-				case *bool:
-					res[name] = *(reflect.ValueOf(fargs[i]).Interface().(*bool))
+				case **int64:
+					res[name] = **(reflect.ValueOf(fargs[i]).Interface().(**int64))
+				case **string:
+					res[name] = **(reflect.ValueOf(fargs[i]).Interface().(**string))
+				case **bool:
+					res[name] = **(reflect.ValueOf(fargs[i]).Interface().(**bool))
 				}
 			}
 			c <- res //name
@@ -112,14 +112,8 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 	return c, nil
 }
 
-func newValueFor(k reflect.Kind) interface{} {
-	switch k {
-	case reflect.Int64:
-		return new(int64)
-	case reflect.Bool:
-		return new(bool)
-	}
-	return new(string)
+func newValueFor(k reflect.Type) interface{} {
+	return reflect.New(k).Interface()
 }
 
 func (l *LockstepServer) loadTables() error {
@@ -166,13 +160,13 @@ func getTables(db *sql.DB) ([]string, error) {
 	return tables, nil
 }
 
-func describeTable(db *sql.DB, name string) (map[string]reflect.Kind, error) {
+func describeTable(db *sql.DB, name string) (map[string]reflect.Type, error) {
 	rows, err := db.Query(fmt.Sprintf("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '%s'", name))
 	if err != nil {
 		return nil, err
 	}
 
-	types := make(map[string]reflect.Kind)
+	types := make(map[string]reflect.Type)
 
 	var colName, dtype string
 	for rows.Next() {
@@ -181,27 +175,27 @@ func describeTable(db *sql.DB, name string) (map[string]reflect.Kind, error) {
 			return nil, fmt.Errorf("Error describing table %s: %v", name, err.Error())
 		}
 
-		types[strings.ToLower(colName)] = getKind(dtype)
+		types[strings.ToLower(colName)] = getType(dtype)
 	}
 
 	return types, nil
 }
 
-func getKind(pgtype string) reflect.Kind {
+func getType(pgtype string) reflect.Type {
 	switch pgtype {
 	case "character", "character varying", "text":
-		return reflect.String
+		return reflect.TypeOf(new(string))
 	case "smallint", "integer", "bigint", "serial", "bigserial":
-		return reflect.Int64
+		return reflect.TypeOf(new(int64))
 	case "boolean":
-		return reflect.Bool
+		return reflect.TypeOf(new(bool))
 	// don't know how to deal w/ time..
-// 	case "time", "timetz", "timestamp", "timestamptz":
-// 		return reflect.ValueOf(&time.Time{}).Kind()
+	case "time", "timetz", "timestamp", "timestamptz":
+		return reflect.TypeOf(&time.Time{})
 	default:
 		fmt.Printf("Unknown type: %s\n", pgtype)
 	}
-	return reflect.String
+	return reflect.TypeOf(new(string))
 }
 
 func startLockstepQuery(db *sql.DB, tableName string) (*sql.Rows, error) {

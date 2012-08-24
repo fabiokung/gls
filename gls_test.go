@@ -5,6 +5,7 @@ import (
 	"github.com/bmizerany/pq"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func openTestDB(t *testing.T) *sql.DB {
@@ -143,35 +144,39 @@ func TestGetTable(t *testing.T) {
 
 var typetests = []struct {
 	in  string
-	out reflect.Kind
+	out reflect.Type
 }{
-	{"character",					reflect.String},
-	{"character varying", reflect.String},
-	{"text",							reflect.String},
-	{"smallint",					reflect.Int64},
-	{"integer",						reflect.Int64},
-	{"bigint",						reflect.Int64},
-	{"serial",						reflect.Int64},
-	{"bigserial",					reflect.Int64},
-	{"boolean",						reflect.Bool},
+	{"character",					reflect.TypeOf(new(string))},
+	{"character varying", reflect.TypeOf(new(string))},
+	{"text",							reflect.TypeOf(new(string))},
+	{"smallint",					reflect.TypeOf(new(int64))},
+	{"integer",						reflect.TypeOf(new(int64))},
+	{"bigint",						reflect.TypeOf(new(int64))},
+	{"serial",						reflect.TypeOf(new(int64))},
+	{"bigserial",					reflect.TypeOf(new(int64))},
+	{"boolean",						reflect.TypeOf(new(bool))},
+	{"time",							reflect.TypeOf(new(time.Time))},
+	{"timetz",						reflect.TypeOf(new(time.Time))},
+	{"timestamp",					reflect.TypeOf(new(time.Time))},
+	{"timestamptz",				reflect.TypeOf(new(time.Time))},
 }
 
-func TestGetKind(t *testing.T) {
+func TestGetType(t *testing.T) {
 	for i, tt := range typetests {
-		if getKind(tt.in) != tt.out {
-			t.Errorf("%d. getKind(%q) => %q, want %q", i, tt.in, tt.out)
+		if getType(tt.in) != tt.out {
+			t.Errorf("%d. getType(%q) => %q, want %v", i, tt.in, getType(tt.in), tt.out)
 		}
 	}
 }
 
 var columntypetests = []struct {
 	name string
-	datatype reflect.Kind
+	datatype reflect.Type
 }{
-	{"name", reflect.String},
-	{"txid", reflect.Int64},
-	{"deleted", reflect.Bool},
-	{"character_octet_length", reflect.Int64},
+	{"name", reflect.TypeOf(new(string))},
+	{"txid", reflect.TypeOf(new(int64))},
+	{"deleted", reflect.TypeOf(new(bool))},
+	{"character_octet_length", reflect.TypeOf(new(int64))},
 }
 
 func TestDescribeTable(t *testing.T) {
