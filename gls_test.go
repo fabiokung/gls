@@ -1,4 +1,4 @@
-package mls2
+package gls
 
 import (
 	"database/sql"
@@ -7,28 +7,8 @@ import (
 	"testing"
 )
 
-// func openTestConn(t *testing.T) *sql.DB {
-// 	datname := os.Getenv("PGDATABASE")
-// 	sslmode := os.Getenv("PGSSLMODE")
-// 
-// 	if datname == "" {
-// 		os.Setenv("PGDATABASE", "pqgotest")
-// 	}
-// 
-// 	if sslmode == "" {
-// 		os.Setenv("PGSSLMODE", "disable")
-// 	}
-// 
-// 	conn, err := sql.Open("postgres", "")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 
-// 	return conn
-// }
-
 func openTestDB(t *testing.T) *sql.DB {
-	cs, err := pq.ParseURL("postgres://localhost:5432/mls_test")
+	cs, err := pq.ParseURL("postgres://localhost:5432/gls_test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,10 +150,10 @@ var typetests = []struct {
 	{"boolean",						reflect.Bool},
 }
 
-func TestGetType(t *testing.T) {
+func TestGetKind(t *testing.T) {
 	for i, tt := range typetests {
-		if getType(tt.in) != tt.out {
-			t.Errorf("%d. getType(%q) => %q, want %q", i, tt.in, tt.out)
+		if getKind(tt.in) != tt.out {
+			t.Errorf("%d. getKind(%q) => %q, want %q", i, tt.in, tt.out)
 		}
 	}
 }

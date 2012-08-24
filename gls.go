@@ -1,11 +1,11 @@
-package mls2
+package gls
 
 import (
 	"database/sql"
 	"fmt"
 	_ "github.com/bmizerany/pq"
 	"io"
-	"mls2/logger"
+	"gls/logger"
 	"reflect"
 	"strings"
 )
@@ -30,70 +30,6 @@ type LockstepServer struct {
 	tables map[string]*pgTable
 }
 
-func LockstepStream(db *sql.DB, w io.Writer, tableName string) error {
-	finished := make(chan bool)
-	c, err := lockstepQuery(db, tableName, finished)
-	if err != nil {
-		return err
-	}
-	for s := range c {
-		_, err = w.Write([]byte(s))
-		if err != nil {
-			finished <- true
-			return err
-		}
-	}
-	return nil
-}
-
-func lockstepQuery(db *sql.DB, tableName string, finished chan bool) (chan string, error) {
-	c := make(chan string)
-	go func(db *sql.DB, table string, c chan string) {
-		defer close(c)
-		rows, err := startLockstepQuery(db, tableName)
-		if err != nil {
-			// no good way to send this error back?
-			c <- err.Error()
-			return
-		}
-
-		// Figure out columns
-		cols, _ := rows.Columns()
-		for i, _ := range cols {
-			cols[i] = strings.ToLower(cols[i])
-		}
-
-		res := make(map[string]interface{}, len(cols))
-		var fargs []interface{}
-
-		for _, name := range cols {
-			res[name] = new(interface{})
-			fargs = append(fargs, res[name])
-		}
-
-		// debug output
-		for i, col := range cols {
-			fmt.Printf("Column: %v %s\n", i, col)
-		}
-		fmt.Printf("Columns: %v\n", )
-
-		for rows.Next() {
-// 			var name string
-// 			var txidSnapshotXmin int64
-// 			err := rows.Scan(&name, &txidSnapshotXmin)
-			err := rows.Scan(fargs...)
-			fmt.Printf("Scanned rows: %v, %s, %s, %s\n", fargs, fargs[0], fargs[1], fargs[3])
-			if err != nil {
-				// no good way to send this error back?
-				c <- err.Error()
-				return
-			}
-			c <- "fake" //name
-		}
-	}(db, tableName, c)
-	return c, nil
-}
-
 func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 	finished := make(chan bool)
 	c, err := l.Query(tableName, finished)
@@ -101,7 +37,7 @@ func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 		return err
 	}
 	for s := range c {
-		_, err = w.Write([]byte(s))
+		_, err = w.Write([]byte(s["name"].(string)))
 		if err != nil {
 			finished <- true
 			return err
@@ -110,7 +46,7 @@ func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 	return nil
 }
 
-func (l *LockstepServer) Query(tableName string, finished chan bool) (chan string, error) {
+func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[string]interface{}, error) {
 	if l.tables[tableName] == nil {
 		return nil, fmt.Errorf("invalid tableName: %q", tableName)
 	}
@@ -123,13 +59,12 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan strin
 		}
 	}
 
-	c := make(chan string)
-	go func(t *pgTable, c chan string) {
+	c := make(chan map[string]interface{})
+	go func(t *pgTable, c chan map[string]interface{}) {
 		defer close(c)
 		rows, err := t.startLockstepQuery()
 		if err != nil {
 			// no good way to send this error back?
-			c <- err.Error()
 			return
 		}
 
@@ -147,51 +82,41 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan strin
 				res[name] = new(int64)
 				fargs = append(fargs, res[name])
 			} else {
-				res[name] = reflect.ValueOf(t.types[name]).Interface()
-				fargs = append(fargs, reflect.ValueOf(t.types[name]).Interface())
+				res[name] = newValueFor(t.types[name])
+				fargs = append(fargs, res[name])
 			}
 		}
-		fmt.Printf("fargs before: %v\n", fargs)
-		fmt.Printf("%v\n", reflect.ValueOf(fargs[1]))
-
-		// debug output
-		for i, col := range cols {
-			fmt.Printf("Column: %v %s\n", i, col)
-		}
-		fmt.Printf("Columns: %v\n", )
 
 		for rows.Next() {
-// 			var name string
-// 			var txidSnapshotXmin int64
-// 			err := rows.Scan(&name, &txidSnapshotXmin)
 			err := rows.Scan(fargs...)
-			fmt.Printf("Scanned rows: %v, %s, %s, %s\n", fargs, fargs[0], fargs[1], fargs[3])
 			if err != nil {
 				// no good way to send this error back?
-				c <- err.Error()
 				return
 			}
-// 			for _, name := range columns {
-// 				strval := fmt.Sprintf("%s", *res[name])
-// 
-// 				switch t.types[name] {
-// 				case reflect.Uint64:
-// 					intval, _ := strconv.Atoi(strval)
-// 					item[name] = uint64(intval)
-// 				case reflect.Int64:
-// 					intval, _ := strconv.Atoi(strval)
-// 					item[name] = intval
-// 				case reflect.Float64:
-// 					floatval, _ := strconv.ParseFloat(strval, 10)
-// 					item[name] = floatval
-// 				default:
-// 					item[name] = strval
-// 				}
-// 			}
-			c <- "fake" //name
+			for i, name := range cols {
+				switch fargs[i].(type) {
+				case *int64:
+					res[name] = *(reflect.ValueOf(fargs[i]).Interface().(*int64))
+				case *string:
+					res[name] = *(reflect.ValueOf(fargs[i]).Interface().(*string))
+				case *bool:
+					res[name] = *(reflect.ValueOf(fargs[i]).Interface().(*bool))
+				}
+			}
+			c <- res //name
 		}
 	}(t, c)
 	return c, nil
+}
+
+func newValueFor(k reflect.Kind) interface{} {
+	switch k {
+	case reflect.Int64:
+		return new(int64)
+	case reflect.Bool:
+		return new(bool)
+	}
+	return new(string)
 }
 
 func (l *LockstepServer) loadTables() error {
@@ -253,13 +178,13 @@ func describeTable(db *sql.DB, name string) (map[string]reflect.Kind, error) {
 			return nil, fmt.Errorf("Error describing table %s: %v", name, err.Error())
 		}
 
-		types[strings.ToLower(colName)] = getType(dtype)
+		types[strings.ToLower(colName)] = getKind(dtype)
 	}
 
 	return types, nil
 }
 
-func getType(pgtype string) reflect.Kind {
+func getKind(pgtype string) reflect.Kind {
 	switch pgtype {
 	case "character", "character varying", "text":
 		return reflect.String
