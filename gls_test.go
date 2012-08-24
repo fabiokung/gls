@@ -218,3 +218,28 @@ func TestStream(t *testing.T) {
 		t.Fatalf("Error from LockstepStream: %v", err.Error())
 	}
 }
+
+func TestStreamAfterDroppingColumn(t *testing.T) {
+	db := handleTestDBPrep(t)
+	defer teardownAndCloseDB(t, db)
+
+	l := LockstepServer{db: db}
+	l.loadTables()
+
+	w := testStringWriter{t, []string{"a.com", "b.com", "c.com"}, 0}
+	err := l.Stream(&w, "domains")
+	if err != nil {
+		t.Fatalf("Error from LockstepStream: %v", err.Error())
+	}
+
+	_, err = db.Exec("ALTER TABLE domains DROP COLUMN deleted")
+	if err != nil {
+		t.Fatalf("Error dropping column: %v", err.Error())
+	}
+
+	w = testStringWriter{t, []string{"a.com", "b.com", "c.com"}, 0}
+	err = l.Stream(&w, "domains")
+	if err != nil {
+		t.Fatalf("Error from LockstepStream: %v", err.Error())
+	}
+}

@@ -37,6 +37,7 @@ func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 		return err
 	}
 	for s := range c {
+		fmt.Println(s)
 		_, err = w.Write([]byte(s["name"].(string)))
 		if err != nil {
 			finished <- true
