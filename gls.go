@@ -66,6 +66,7 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 		rows, err := t.startLockstepQuery()
 		if err != nil {
 			// no good way to send this error back?
+			fmt.Printf("Error in startLockstepQuery: %v\n", err)
 			return
 		}
 
@@ -92,6 +93,7 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 			err := rows.Scan(fargs...)
 			if err != nil {
 				// no good way to send this error back?
+				fmt.Printf("Error in Scan: %v\n", err)
 				return
 			}
 			for i, name := range cols {
